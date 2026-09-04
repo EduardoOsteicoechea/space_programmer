@@ -1,22 +1,20 @@
 # space_programmer
 
-Interactive floor-plan sketch: orthogonal halls, a circular core, and square rooms that clip to an invisible oval.
+Interactive floor-plan sketch over a real Revit area contour.
 
 ## Run
 
-Open `index.html` in a browser, or:
+Open `index.html` in a browser:
 
 ```powershell
 start index.html
 ```
 
-## Behavior
+## Geometry
 
-- Move the pointer to slide the hall cross
-- Rooms are squares at **1.5×** hall thickness
-- Rooms with **&lt; 75%** visible area (oval + circular hall clip) hide
-- A random contiguous neighbor grows to fill the freed cell
-- Hall arms share equal pixel thickness; horizontal/vertical spans cover all room bands
+- Outer clip: Area `1927977` contour (`contour.json` / `contour-data.js`)
+- Inner clip: largest central island from the same export
+- Orthogonal halls + square rooms (1.5× hall thickness)
 
 ## License
 

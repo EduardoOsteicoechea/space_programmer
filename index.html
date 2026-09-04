@@ -27,8 +27,11 @@
 
     .stage {
       position: relative;
-      width: min(98vw, 1400px);
-      height: 96vh;
+      /* Match contour space (1000×740) so the plan is not stretched */
+      width: min(98vw, 1400px, calc(96vh * 1000 / 740));
+      aspect-ratio: 1000 / 740;
+      height: auto;
+      max-height: 96vh;
       overflow: hidden;
       background: #14181e;
       cursor: crosshair;
@@ -46,24 +49,29 @@
     <canvas id="c"></canvas>
   </div>
 
+  <script src="contour-data.js"></script>
   <script>
     const canvas = document.getElementById("c");
     const ctx = canvas.getContext("2d");
     const stage = document.getElementById("stage");
 
-    const OVAL = { cx: 500, cy: 370, rx: 490, ry: 350 };
-    const HOLE = { cx: OVAL.cx, cy: OVAL.cy, r: 56 };
-    const RING_W = 44;
-    const KEEP_OUT = HOLE.r + RING_W;
+    // From AreaContourExport area_1927977 (outer + central island)
+    const SPACE = { w: 1000, h: 740 };
+    let OUTER = null;
+    let ISLAND = null;
+    let OUTER_BOUNDS = { minX: 40, maxX: 960, minY: 40, maxY: 700 };
+    let pathOuterPx = null, pathIslandPx = null, pathRingPx = null;
+    // Uniform scale + letterbox offsets (preserves contour proportions)
+    let view = { ox: 0, oy: 0, s: 1 };
 
     const HALL_REF = 56 * 0.75; // hall thickness; rooms = 1.5× this
-    const CELL = 4;          // rooms per block edge
-    const H_BANDS = 3;       // left/right of central V
-    const V_BANDS = 3;       // above/below of central H
+    const CELL = 4;
+    const H_BANDS = 3;
+    const V_BANDS = 3;
     const SEC_H = H_BANDS - 1;
     const SEC_V = V_BANDS - 1;
 
-    const hall = { cx: OVAL.cx, cy: OVAL.cy, tx: OVAL.cx, ty: OVAL.cy };
+    const hall = { cx: 499, cy: 313, tx: 499, ty: 313 };
     const QUAD_HUE = { nw: 210, ne: 48, sw: 38, se: 280 };
     const QUADS = ["nw", "ne", "sw", "se"];
     const HALL_COLOR = "rgb(78, 88, 102)";
@@ -110,16 +118,28 @@
       canvas.style.width = W + "px";
       canvas.style.height = H + "px";
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      // Contain: one scale for X and Y so the contour is never stretched
+      const s = Math.min(W / SPACE.w, H / SPACE.h);
+      view = {
+        s,
+        ox: (W - SPACE.w * s) / 2,
+        oy: (H - SPACE.h * s) / 2,
+      };
       metrics = computeMetrics();
-      layoutFromHall(true);
+      buildPixelPaths();
+      if (OUTER) layoutFromHall(true);
     }
 
-    function toPx(nx, ny) { return { x: (nx / 1000) * W, y: (ny / 740) * H }; }
-    function pxScale() { return { sx: W / 1000, sy: H / 740 }; }
+    function toPx(nx, ny) {
+      return { x: view.ox + nx * view.s, y: view.oy + ny * view.s };
+    }
+    function pxScale() {
+      return { sx: view.s, sy: view.s };
+    }
 
     function computeMetrics() {
       const { sx, sy } = pxScale();
-      const hallPx = HALL_REF * ((sx + sy) / 2);
+      const hallPx = HALL_REF * sx;
       const roomPx = hallPx * 1.5;
       return {
         sx, sy, hallPx, roomPx,
@@ -128,18 +148,34 @@
       };
     }
 
-    function inOval(x, y) {
-      const dx = (x - OVAL.cx) / OVAL.rx;
-      const dy = (y - OVAL.cy) / OVAL.ry;
-      return dx * dx + dy * dy <= 1;
+    function pointInPoly(x, y, poly) {
+      let inside = false;
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const xi = poly[i][0], yi = poly[i][1];
+        const xj = poly[j][0], yj = poly[j][1];
+        if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / ((yj - yi) || 1e-12) + xi) inside = !inside;
+      }
+      return inside;
     }
-    function inCircularHall(x, y) {
-      const dx = x - HOLE.cx, dy = y - HOLE.cy;
-      return dx * dx + dy * dy < KEEP_OUT * KEEP_OUT;
+
+    function buildPixelPaths() {
+      if (!OUTER || !ISLAND || !W || !view.s) return;
+      const { ox, oy, s } = view;
+      function addPoly(path, poly) {
+        path.moveTo(ox + poly[0][0] * s, oy + poly[0][1] * s);
+        for (let i = 1; i < poly.length; i++) {
+          path.lineTo(ox + poly[i][0] * s, oy + poly[i][1] * s);
+        }
+        path.closePath();
+      }
+      pathOuterPx = new Path2D(); addPoly(pathOuterPx, OUTER);
+      pathIslandPx = new Path2D(); addPoly(pathIslandPx, ISLAND);
+      pathRingPx = new Path2D(); addPoly(pathRingPx, OUTER); addPoly(pathRingPx, ISLAND);
     }
-    function isVisiblePoint(x, y) {
-      return inOval(x, y) && !inCircularHall(x, y);
-    }
+
+    function inOuter(x, y) { return OUTER ? pointInPoly(x, y, OUTER) : false; }
+    function inIsland(x, y) { return ISLAND ? pointInPoly(x, y, ISLAND) : false; }
+    function isVisiblePoint(x, y) { return inOuter(x, y) && !inIsland(x, y); }
     function visibleFraction(x, y, w, h) {
       const N = 10;
       let hit = 0;
@@ -151,8 +187,8 @@
       return hit / (N * N);
     }
 
-    /** True if rect touches oval exterior or circular hall (any sample not fully safe). */
-    function touchesOvalOrCircle(x, y, w, h) {
+    /** True if rect touches outer contour or central island (any sample not fully safe). */
+    function touchesContour(x, y, w, h) {
       const pts = [
         [x, y], [x + w, y], [x, y + h], [x + w, y + h],
         [x + w / 2, y], [x + w / 2, y + h], [x, y + h / 2], [x + w, y + h / 2],
@@ -206,10 +242,10 @@
     function hallBounds() {
       const m = metrics ? metrics.vW + metrics.rW * 2 : 120;
       return {
-        minX: OVAL.cx - OVAL.rx + m,
-        maxX: OVAL.cx + OVAL.rx - m,
-        minY: OVAL.cy - OVAL.ry + m,
-        maxY: OVAL.cy + OVAL.ry - m,
+        minX: OUTER_BOUNDS.minX + m,
+        maxX: OUTER_BOUNDS.maxX - m,
+        minY: OUTER_BOUNDS.minY + m,
+        maxY: OUTER_BOUNDS.maxY - m,
       };
     }
 
@@ -329,7 +365,7 @@
         r.absorbIds = [];
         const cx = cell.x + cell.w / 2, cy = cell.y + cell.h / 2;
         r.prox = Math.max(0, 1 - Math.hypot(cx - hall.cx, cy - hall.cy) / 420);
-        r.hidden = touchesOvalOrCircle(r.bx, r.by, r.bw, r.bh);
+        r.hidden = touchesContour(r.bx, r.by, r.bw, r.bh);
       }
 
       // Hidden → grow right, else left, else up, else down
@@ -403,21 +439,17 @@
 
     stage.addEventListener("pointermove", (e) => {
       const rect = stage.getBoundingClientRect();
-      const nx = ((e.clientX - rect.left) / W) * 1000;
-      const ny = ((e.clientY - rect.top) / H) * 740;
+      const nx = (e.clientX - rect.left - view.ox) / view.s;
+      const ny = (e.clientY - rect.top - view.oy) / view.s;
       const b = hallBounds();
       hall.tx = Math.max(b.minX, Math.min(b.maxX, nx));
       hall.ty = Math.max(b.minY, Math.min(b.maxY, ny));
     });
 
-    function roomsClipPath() {
-      const { sx, sy } = pxScale();
-      const c = toPx(OVAL.cx, OVAL.cy);
-      const hole = toPx(HOLE.cx, HOLE.cy);
-      const hs = (sx + sy) / 2;
-      ctx.beginPath();
-      ctx.ellipse(c.x, c.y, OVAL.rx * sx, OVAL.ry * sy, 0, 0, Math.PI * 2);
-      ctx.ellipse(hole.x, hole.y, KEEP_OUT * hs, KEEP_OUT * hs, 0, 0, Math.PI * 2, true);
+    function clipToContourRing() {
+      if (!pathRingPx) return false;
+      ctx.clip(pathRingPx, "evenodd");
+      return true;
     }
 
     function roomFill(room) {
@@ -431,29 +463,24 @@
       ctx.fillRect(p.x, p.y, q.x - p.x, q.y - p.y);
     }
 
-    function drawCircularHall() {
-      const { sx, sy } = pxScale();
-      const hole = toPx(HOLE.cx, HOLE.cy);
-      const hs = (sx + sy) / 2;
-      ctx.beginPath();
-      ctx.arc(hole.x, hole.y, KEEP_OUT * hs, 0, Math.PI * 2);
-      ctx.arc(hole.x, hole.y, HOLE.r * hs, 0, Math.PI * 2, true);
+    function drawContourShell() {
+      if (!pathOuterPx || !pathIslandPx) return;
+      ctx.fillStyle = "rgba(255,255,255,0.04)";
+      ctx.fill(pathOuterPx);
       ctx.fillStyle = HALL_COLOR;
-      ctx.fill("evenodd");
-      ctx.beginPath();
-      ctx.arc(hole.x, hole.y, HOLE.r * hs, 0, Math.PI * 2);
-      ctx.fillStyle = "#0e1116";
-      ctx.fill();
+      ctx.fill(pathIslandPx);
+      ctx.strokeStyle = "rgba(255,255,255,0.45)";
+      ctx.lineWidth = 2;
+      ctx.stroke(pathOuterPx);
       ctx.strokeStyle = HALL_COLOR;
       ctx.lineWidth = 2;
-      ctx.stroke();
+      ctx.stroke(pathIslandPx);
     }
 
     function drawHallPockets() {
-      if (!hallPockets.length) return;
+      if (!hallPockets.length || !pathRingPx) return;
       ctx.save();
-      roomsClipPath();
-      ctx.clip("evenodd");
+      ctx.clip(pathRingPx, "evenodd");
       ctx.fillStyle = HALL_COLOR;
       for (const p of hallPockets) {
         const tl = toPx(p.x, p.y);
@@ -464,23 +491,16 @@
     }
 
     function drawHalls() {
+      if (!pathRingPx) return;
       const L = hallLayout(hall.cx, hall.cy);
-      const { sx, sy } = pxScale();
-      const c = toPx(OVAL.cx, OVAL.cy);
-      const hole = toPx(HOLE.cx, HOLE.cy);
-      const hs = (sx + sy) / 2;
 
       ctx.save();
-      ctx.beginPath();
-      ctx.ellipse(c.x, c.y, OVAL.rx * sx, OVAL.ry * sy, 0, 0, Math.PI * 2);
-      ctx.clip();
+      ctx.clip(pathRingPx, "evenodd");
 
-      // Full horizontal corridors: central + secondary top/bottom
       fillHallRect(L.hLeft, L.hallT, L.hRight - L.hLeft, L.hH);
       for (const s of L.topSecs) fillHallRect(L.hLeft, s.T, L.hRight - L.hLeft, L.hH);
       for (const s of L.botSecs) fillHallRect(L.hLeft, s.T, L.hRight - L.hLeft, L.hH);
 
-      // Full vertical corridors: central + secondary left/right
       const vH = L.vBottom - L.vTop;
       fillHallRect(L.hallL, L.vTop, L.vW, vH);
       for (const s of L.leftSecs) fillHallRect(s.L, L.vTop, L.vW, vH);
@@ -492,11 +512,6 @@
       ctx.fillStyle = "#c8d2dc";
       ctx.fill();
       ctx.restore();
-
-      ctx.beginPath();
-      ctx.arc(hole.x, hole.y, HOLE.r * hs, 0, Math.PI * 2);
-      ctx.fillStyle = "#0e1116";
-      ctx.fill();
     }
 
     function drawRoomClipped(room, t) {
@@ -507,8 +522,8 @@
       const label = toPx(room.lx + room.lw / 2, room.ly + room.lh / 2);
 
       ctx.save();
-      roomsClipPath();
-      ctx.clip("evenodd");
+      if (!pathRingPx) { ctx.restore(); return; }
+      ctx.clip(pathRingPx, "evenodd");
       ctx.fillStyle = roomFill(room);
       ctx.fillRect(tl.x, tl.y, rw, rh);
       ctx.strokeStyle = "rgba(255,255,255,0.12)";
@@ -533,22 +548,52 @@
     }
 
     function frame(t) {
+      if (!OUTER) { requestAnimationFrame(frame); return; }
       if (!metrics) metrics = computeMetrics();
       update(t);
       ctx.clearRect(0, 0, W, H);
+      drawContourShell();
       drawHalls();
-      drawCircularHall();
       drawHallPockets();
       const sorted = [...rooms].sort((a, b) => a.prox - b.prox);
       for (const room of sorted) drawRoomClipped(room, t);
       for (const f of fillers) drawRoomClipped(f, t);
-      drawCircularHall();
+      // Island on top so hall arms don't paint over it
+      if (pathIslandPx) {
+        ctx.fillStyle = HALL_COLOR;
+        ctx.fill(pathIslandPx);
+        ctx.strokeStyle = HALL_COLOR;
+        ctx.lineWidth = 2;
+        ctx.stroke(pathIslandPx);
+      }
+      if (pathOuterPx) {
+        ctx.strokeStyle = "rgba(255,255,255,0.4)";
+        ctx.lineWidth = 2;
+        ctx.stroke(pathOuterPx);
+      }
       requestAnimationFrame(frame);
     }
 
-    window.addEventListener("resize", resize);
-    resize();
-    requestAnimationFrame(frame);
+    async function boot() {
+      const data = window.CONTOUR_DATA || await fetch("contour.json").then((r) => r.json());
+      OUTER = data.outer;
+      ISLAND = data.island;
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const [x, y] of OUTER) {
+        if (x < minX) minX = x; if (y < minY) minY = y;
+        if (x > maxX) maxX = x; if (y > maxY) maxY = y;
+      }
+      OUTER_BOUNDS = { minX, minY, maxX, maxY };
+      const icx = ISLAND.reduce((s, p) => s + p[0], 0) / ISLAND.length;
+      const icy = ISLAND.reduce((s, p) => s + p[1], 0) / ISLAND.length;
+      hall.cx = hall.tx = icx;
+      hall.cy = hall.ty = icy;
+      window.addEventListener("resize", resize);
+      resize();
+      requestAnimationFrame(frame);
+    }
+
+    boot();
   </script>
 </body>
 </html>
