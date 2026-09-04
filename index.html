@@ -55,7 +55,6 @@
     const HOLE = { cx: OVAL.cx, cy: OVAL.cy, r: 56 };
     const RING_W = 44;
     const KEEP_OUT = HOLE.r + RING_W;
-    const VISIBLE_MIN = 0.02;
 
     const HALL_REF = 56;
     const CELL = 4;          // rooms per block edge
@@ -153,6 +152,58 @@
       return hit / (N * N);
     }
 
+    /** True if rect touches oval exterior or circular hall (any sample not fully safe). */
+    function touchesOvalOrCircle(x, y, w, h) {
+      const pts = [
+        [x, y], [x + w, y], [x, y + h], [x + w, y + h],
+        [x + w / 2, y], [x + w / 2, y + h], [x, y + h / 2], [x + w, y + h / 2],
+        [x + w / 2, y + h / 2],
+      ];
+      for (const [px, py] of pts) {
+        if (!isVisiblePoint(px, py)) return true;
+      }
+      // denser edge check along borders
+      for (let i = 0; i <= 8; i++) {
+        const t = i / 8;
+        if (!isVisiblePoint(x + t * w, y)) return true;
+        if (!isVisiblePoint(x + t * w, y + h)) return true;
+        if (!isVisiblePoint(x, y + t * h)) return true;
+        if (!isVisiblePoint(x + w, y + t * h)) return true;
+      }
+      return false;
+    }
+
+    /** Screen-space neighbor priority: right → left → up → down. */
+    function preferredNeighbor(room) {
+      const q = room.q;
+      const tryId = (gi, gj) => {
+        if (gi < 0 || gi >= CELL || gj < 0 || gj >= CELL) return null;
+        return byId[`${q}-h${room.hb}-v${room.vb}-${gi}-${gj}`] || null;
+      };
+
+      // right (higher x)
+      const right = (q === "nw" || q === "sw")
+        ? tryId(room.gi - 1, room.gj)
+        : tryId(room.gi + 1, room.gj);
+      // left (lower x)
+      const left = (q === "nw" || q === "sw")
+        ? tryId(room.gi + 1, room.gj)
+        : tryId(room.gi - 1, room.gj);
+      // up (lower y)
+      const up = (q === "nw" || q === "ne")
+        ? tryId(room.gi, room.gj + 1)
+        : tryId(room.gi, room.gj - 1);
+      // down (higher y)
+      const down = (q === "nw" || q === "ne")
+        ? tryId(room.gi, room.gj - 1)
+        : tryId(room.gi, room.gj + 1);
+
+      for (const n of [right, left, up, down]) {
+        if (n && !n.hidden) return n;
+      }
+      return null;
+    }
+
     function hallBounds() {
       const m = metrics ? metrics.vW + metrics.rW * 2 : 120;
       return {
@@ -238,6 +289,7 @@
     }
 
     function neighborsOf(room) {
+      // kept for compatibility — prefer preferredNeighbor
       const out = [];
       for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         const gi = room.gi + di, gj = room.gj + dj;
@@ -278,17 +330,15 @@
         r.absorbIds = [];
         const cx = cell.x + cell.w / 2, cy = cell.y + cell.h / 2;
         r.prox = Math.max(0, 1 - Math.hypot(cx - hall.cx, cy - hall.cy) / 420);
-        r.visibleFrac = visibleFraction(r.bx, r.by, r.bw, r.bh);
-        r.hidden = r.visibleFrac < VISIBLE_MIN;
+        r.hidden = touchesOvalOrCircle(r.bx, r.by, r.bw, r.bh);
       }
 
-      const seed = `${Math.round(hall.cx / 8)}:${Math.round(hall.cy / 8)}`;
+      // Hidden → grow right, else left, else up, else down
       const absorbed = new Set();
       for (const r of rooms) {
         if (!r.hidden) continue;
-        const cands = neighborsOf(r).filter((n) => !n.hidden);
-        if (!cands.length) continue;
-        const pick = cands[hashStr(r.id + "|" + seed) % cands.length];
+        const pick = preferredNeighbor(r);
+        if (!pick) continue;
         pick.absorbIds.push(r.id);
         absorbed.add(r.id);
       }
@@ -306,6 +356,7 @@
         r.x = rect.x; r.y = rect.y; r.w = rect.w; r.h = rect.h;
       }
 
+      // No neighbor → room occupying the whole corner/segment
       for (const q of QUADS) {
         for (let hb = 0; hb < H_BANDS; hb++) {
           for (let vb = 0; vb < V_BANDS; vb++) {
@@ -325,9 +376,10 @@
               }
             }
 
-            const frac = visibleFraction(rect.x, rect.y, rect.w, rect.h);
-            if (frac < VISIBLE_MIN) {
-              if (frac > 0.02) hallPockets.push({ x: rect.x, y: rect.y, w: rect.w, h: rect.h });
+            // Always create the corner room (clipped by overflow)
+            const anyVisible = visibleFraction(rect.x, rect.y, rect.w, rect.h) > 0.01;
+            if (!anyVisible) {
+              hallPockets.push({ x: rect.x, y: rect.y, w: rect.w, h: rect.h });
               continue;
             }
 
