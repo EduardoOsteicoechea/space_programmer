@@ -98,7 +98,6 @@
 
     let fillers = [];
     let hallPockets = [];
-    let hueShift = 0;
     let dpr = 1, W = 0, H = 0, metrics = null;
 
     function resize() {
@@ -421,10 +420,8 @@
       ctx.ellipse(hole.x, hole.y, KEEP_OUT * hs, KEEP_OUT * hs, 0, 0, Math.PI * 2, true);
     }
 
-    function roomFill(room, t) {
-      const wave = Math.sin(t * 0.008 + room.hue) * 0.5 + 0.5;
-      const h = (room.hue + hueShift + room.prox * 30 * wave) % 360;
-      return `hsla(${h}, ${50 + room.prox * 25}%, ${34 + room.prox * 14}%, ${0.72 + room.prox * 0.18})`;
+    function roomFill(room) {
+      return `hsla(${room.hue}, 55%, 42%, 0.85)`;
     }
 
     function fillHallRect(x, y, w, h) {
@@ -512,7 +509,7 @@
       ctx.save();
       roomsClipPath();
       ctx.clip("evenodd");
-      ctx.fillStyle = roomFill(room, t);
+      ctx.fillStyle = roomFill(room);
       ctx.fillRect(tl.x, tl.y, rw, rh);
       ctx.strokeStyle = "rgba(255,255,255,0.12)";
       ctx.lineWidth = 1;
@@ -530,7 +527,6 @@
     function update(t) {
       hall.cx = hall.tx;
       hall.cy = hall.ty;
-      hueShift = (hueShift + 0.12) % 360;
       layoutFromHall(false);
       for (const r of rooms) { r.lx = r.x; r.ly = r.y; r.lw = r.w; r.lh = r.h; }
       for (const f of fillers) { f.lx = f.x; f.ly = f.y; f.lw = f.w; f.lh = f.h; }
