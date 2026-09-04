@@ -299,8 +299,9 @@
     const SPACE = { w: 1000, h: 740 };
     let OUTER = null;
     let ISLAND = null;
+    let ISLAND_VOID = null;
     let OUTER_BOUNDS = { minX: 40, maxX: 960, minY: 40, maxY: 700 };
-    let pathOuterPx = null, pathIslandPx = null, pathRingPx = null;
+    let pathOuterPx = null, pathIslandPx = null, pathIslandVoidPx = null, pathInnerHallPx = null, pathRingPx = null;
     // Uniform scale + letterbox offsets (preserves contour proportions)
     let view = { ox: 0, oy: 0, s: 1 };
 
@@ -317,6 +318,7 @@
     const hall = { cx: 499, cy: 313, tx: 499, ty: 313 };
     const QUADS = ["nw", "ne", "sw", "se"];
     const HALL_COLOR = "rgb(78, 88, 102)";
+    const STAGE_BG = "#14181e";
     const FLOOR_W_M = 112.442;
     const FLOOR_H_M = 86.076;
     const M2_SCALE = (FLOOR_W_M / SPACE.w) * (FLOOR_H_M / SPACE.h);
@@ -428,9 +430,27 @@
       return inside;
     }
 
+    /** Inset polygon toward centroid by dist (norm units ≈ hall thickness). */
+    function insetPolygon(poly, dist) {
+      let cx = 0, cy = 0;
+      for (const [x, y] of poly) { cx += x; cy += y; }
+      cx /= poly.length;
+      cy /= poly.length;
+      return poly.map(([x, y]) => {
+        const dx = cx - x, dy = cy - y;
+        const len = Math.hypot(dx, dy);
+        if (len < 1e-6) return [x, y];
+        const move = Math.min(dist, len * 0.92);
+        return [x + (dx / len) * move, y + (dy / len) * move];
+      });
+    }
+
     function buildPixelPaths() {
       if (!OUTER || !ISLAND || !W || !view.s) return;
       const { ox, oy, s } = view;
+      const hallInset = metrics ? metrics.vW : HALL_REF;
+      ISLAND_VOID = insetPolygon(ISLAND, hallInset);
+
       function addPoly(path, poly) {
         path.moveTo(ox + poly[0][0] * s, oy + poly[0][1] * s);
         for (let i = 1; i < poly.length; i++) {
@@ -440,6 +460,10 @@
       }
       pathOuterPx = new Path2D(); addPoly(pathOuterPx, OUTER);
       pathIslandPx = new Path2D(); addPoly(pathIslandPx, ISLAND);
+      pathIslandVoidPx = new Path2D(); addPoly(pathIslandVoidPx, ISLAND_VOID);
+      pathInnerHallPx = new Path2D();
+      addPoly(pathInnerHallPx, ISLAND);
+      addPoly(pathInnerHallPx, ISLAND_VOID);
       pathRingPx = new Path2D(); addPoly(pathRingPx, OUTER); addPoly(pathRingPx, ISLAND);
     }
 
@@ -905,14 +929,27 @@
       if (!pathOuterPx || !pathIslandPx) return;
       ctx.fillStyle = "rgba(255,255,255,0.04)";
       ctx.fill(pathOuterPx);
-      ctx.fillStyle = HALL_COLOR;
-      ctx.fill(pathIslandPx);
       ctx.strokeStyle = "rgba(255,255,255,0.45)";
       ctx.lineWidth = 2;
       ctx.stroke(pathOuterPx);
-      ctx.strokeStyle = HALL_COLOR;
-      ctx.lineWidth = 2;
+      ctx.strokeStyle = "rgba(255,255,255,0.2)";
+      ctx.lineWidth = 1.5;
       ctx.stroke(pathIslandPx);
+    }
+
+    function drawInnerIslandHall() {
+      if (!pathInnerHallPx) return;
+      ctx.fillStyle = HALL_COLOR;
+      ctx.fill(pathInnerHallPx, "evenodd");
+    }
+
+    function drawIslandVoid() {
+      if (!pathIslandVoidPx) return;
+      ctx.fillStyle = STAGE_BG;
+      ctx.fill(pathIslandVoidPx);
+      ctx.strokeStyle = "rgba(255,255,255,0.15)";
+      ctx.lineWidth = 1;
+      ctx.stroke(pathIslandVoidPx);
     }
 
     function drawHallPockets() {
@@ -1009,20 +1046,14 @@
       ctx.clearRect(0, 0, W, H);
       drawContourShell();
       drawHalls();
+      drawInnerIslandHall();
       drawHallPockets();
       const sorted = [...rooms].sort((a, b) => a.prox - b.prox);
       for (const room of sorted) drawRoomClipped(room, t);
       for (const f of fillers) drawRoomClipped(f, t);
       for (const c of customRooms) drawRoomClipped(c, t);
       if (placement?.dragging) drawPlacementGhost();
-      // Island on top so hall arms don't paint over it
-      if (pathIslandPx) {
-        ctx.fillStyle = HALL_COLOR;
-        ctx.fill(pathIslandPx);
-        ctx.strokeStyle = HALL_COLOR;
-        ctx.lineWidth = 2;
-        ctx.stroke(pathIslandPx);
-      }
+      drawIslandVoid();
       if (pathOuterPx) {
         ctx.strokeStyle = "rgba(255,255,255,0.4)";
         ctx.lineWidth = 2;
@@ -1105,12 +1136,20 @@
 
       const hallItem = `<li class="legend-item">
         <span class="legend-swatch" style="background:${HALL_COLOR}"></span>
-        <span class="legend-label">Pasillos e isla central</span>
+        <span class="legend-label">Pasillos</span>
+      </li>`;
+      const voidItem = `<li class="legend-item">
+        <span class="legend-swatch" style="background:${STAGE_BG};border-color:rgba(255,255,255,0.35)"></span>
+        <span class="legend-label">Hueco central</span>
+      </li>`;
+      const innerHallItem = `<li class="legend-item">
+        <span class="legend-swatch" style="background:${HALL_COLOR}"></span>
+        <span class="legend-label">Pasillo perimetral isla</span>
       </li>`;
 
       el.innerHTML = `
         <h2>Leyenda</h2>
-        <ul class="legend-items">${items}${hallItem}</ul>`;
+        <ul class="legend-items">${items}${hallItem}${innerHallItem}${voidItem}</ul>`;
     }
 
     function setupRoomCreator() {
