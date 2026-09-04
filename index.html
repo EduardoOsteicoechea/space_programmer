@@ -55,36 +55,34 @@
     const HOLE = { cx: OVAL.cx, cy: OVAL.cy, r: 56 };
     const RING_W = 44;
     const KEEP_OUT = HOLE.r + RING_W;
-    const VISIBLE_MIN = 0.75;
+    const VISIBLE_MIN = 0.50;
 
     const HALL_REF = 56;
-    const ROOMS_PER_BAND = 4;
-    const ROWS = 4;
-    const BANDS = 3;
-    const SEC_HALLS = BANDS - 1;
+    const CELL = 4;          // rooms per block edge
+    const H_BANDS = 3;       // left/right of central V
+    const V_BANDS = 3;       // above/below of central H
+    const SEC_H = H_BANDS - 1;
+    const SEC_V = V_BANDS - 1;
 
-    const hall = {
-      cx: OVAL.cx,
-      cy: OVAL.cy,
-      tx: OVAL.cx,
-      ty: OVAL.cy,
-    };
-
+    const hall = { cx: OVAL.cx, cy: OVAL.cy, tx: OVAL.cx, ty: OVAL.cy };
     const QUAD_HUE = { nw: 210, ne: 48, sw: 38, se: 280 };
     const QUADS = ["nw", "ne", "sw", "se"];
+    const HALL_COLOR = "rgb(78, 88, 102)";
 
     const roomDefs = [];
     for (const q of QUADS) {
-      for (let band = 0; band < BANDS; band++) {
-        for (let gj = 0; gj < ROWS; gj++) {
-          for (let gi = 0; gi < ROOMS_PER_BAND; gi++) {
-            const i = band * ROOMS_PER_BAND * ROWS + gj * ROOMS_PER_BAND + gi;
-            roomDefs.push({
-              id: `${q}-b${band}-${gi}-${gj}`,
-              name: `${q.toUpperCase()} ${i + 1}`,
-              q, band, gi, gj,
-              hue: (QUAD_HUE[q] + i * 6 + band * 35) % 360,
-            });
+      for (let hb = 0; hb < H_BANDS; hb++) {
+        for (let vb = 0; vb < V_BANDS; vb++) {
+          for (let gj = 0; gj < CELL; gj++) {
+            for (let gi = 0; gi < CELL; gi++) {
+              const i = ((hb * V_BANDS + vb) * CELL + gj) * CELL + gi;
+              roomDefs.push({
+                id: `${q}-h${hb}-v${vb}-${gi}-${gj}`,
+                name: `${q.toUpperCase()} ${i + 1}`,
+                q, hb, vb, gi, gj,
+                hue: (QUAD_HUE[q] + i * 5 + hb * 28 + vb * 18) % 360,
+              });
+            }
           }
         }
       }
@@ -95,24 +93,14 @@
       bx: 0, by: 0, bw: 0, bh: 0,
       x: 0, y: 0, w: 0, h: 0,
       lx: 0, ly: 0, lw: 0, lh: 0,
-      prox: 0,
-      visibleFrac: 1,
-      hidden: false,
-      absorbIds: [],
+      prox: 0, visibleFrac: 1, hidden: false, absorbIds: [],
     }));
-
     const byId = Object.fromEntries(rooms.map((r) => [r.id, r]));
-    /** Synthetic rooms that fill a whole segment when no neighbor can absorb. */
+
     let fillers = [];
-    /** Hall-colored pads for corner voids (can't place a room against the circle). */
     let hallPockets = [];
-
-    const HALL_COLOR = "rgb(78, 88, 102)";
-
     let hueShift = 0;
-    let dpr = 1;
-    let W = 0, H = 0;
-    let metrics = null;
+    let dpr = 1, W = 0, H = 0, metrics = null;
 
     function resize() {
       const rect = stage.getBoundingClientRect();
@@ -128,13 +116,8 @@
       layoutFromHall(true);
     }
 
-    function toPx(nx, ny) {
-      return { x: (nx / 1000) * W, y: (ny / 740) * H };
-    }
-
-    function pxScale() {
-      return { sx: W / 1000, sy: H / 740 };
-    }
+    function toPx(nx, ny) { return { x: (nx / 1000) * W, y: (ny / 740) * H }; }
+    function pxScale() { return { sx: W / 1000, sy: H / 740 }; }
 
     function computeMetrics() {
       const { sx, sy } = pxScale();
@@ -142,10 +125,8 @@
       const roomPx = hallPx * 1.5;
       return {
         sx, sy, hallPx, roomPx,
-        vW: hallPx / sx,
-        hH: hallPx / sy,
-        rW: roomPx / sx,
-        rH: roomPx / sy,
+        vW: hallPx / sx, hH: hallPx / sy,
+        rW: roomPx / sx, rH: roomPx / sy,
       };
     }
 
@@ -154,17 +135,13 @@
       const dy = (y - OVAL.cy) / OVAL.ry;
       return dx * dx + dy * dy <= 1;
     }
-
     function inCircularHall(x, y) {
-      const dx = x - HOLE.cx;
-      const dy = y - HOLE.cy;
+      const dx = x - HOLE.cx, dy = y - HOLE.cy;
       return dx * dx + dy * dy < KEEP_OUT * KEEP_OUT;
     }
-
     function isVisiblePoint(x, y) {
       return inOval(x, y) && !inCircularHall(x, y);
     }
-
     function visibleFraction(x, y, w, h) {
       const N = 10;
       let hit = 0;
@@ -186,55 +163,66 @@
       };
     }
 
+    /**
+     * Central cross + secondary V halls (L/R) + secondary H halls (top/bottom).
+     * Pattern each axis: center | 4 rooms | hall | 4 rooms | hall | 4 rooms
+     */
     function hallLayout(cx, cy) {
       const { vW, hH, rW, rH } = metrics;
-      const bandSpan = ROOMS_PER_BAND * rW;
-      const rowSpan = ROWS * rH;
+      const bandW = CELL * rW;
+      const bandH = CELL * rH;
 
       const hallL = cx - vW / 2;
       const hallR = cx + vW / 2;
       const hallT = cy - hH / 2;
       const hallB = cy + hH / 2;
 
-      const leftSecs = [];
-      const rightSecs = [];
+      const leftSecs = [], rightSecs = [], topSecs = [], botSecs = [];
+      let lCur = hallL, rCur = hallR, tCur = hallT, bCur = hallB;
 
-      let leftCursor = hallL;
-      let rightCursor = hallR;
-      for (let i = 0; i < SEC_HALLS; i++) {
-        leftCursor -= bandSpan;
-        leftSecs.push({ L: leftCursor - vW, R: leftCursor });
-        leftCursor -= vW;
-
-        rightCursor += bandSpan;
-        rightSecs.push({ L: rightCursor, R: rightCursor + vW });
-        rightCursor += vW;
+      for (let i = 0; i < SEC_H; i++) {
+        lCur -= bandW;
+        leftSecs.push({ L: lCur - vW, R: lCur });
+        lCur -= vW;
+        rCur += bandW;
+        rightSecs.push({ L: rCur, R: rCur + vW });
+        rCur += vW;
+      }
+      for (let i = 0; i < SEC_V; i++) {
+        tCur -= bandH;
+        topSecs.push({ T: tCur - hH, B: tCur });
+        tCur -= hH;
+        bCur += bandH;
+        botSecs.push({ T: bCur, B: bCur + hH });
+        bCur += hH;
       }
 
       return {
         hallL, hallR, hallT, hallB, vW, hH, rW, rH,
-        leftSecs, rightSecs,
-        hLeft: hallL - BANDS * bandSpan - SEC_HALLS * vW,
-        hRight: hallR + BANDS * bandSpan + SEC_HALLS * vW,
-        // Vertical corridors through all rows above/below
-        vTop: hallT - rowSpan,
-        vBottom: hallB + rowSpan,
+        leftSecs, rightSecs, topSecs, botSecs,
+        hLeft: hallL - H_BANDS * bandW - SEC_H * vW,
+        hRight: hallR + H_BANDS * bandW + SEC_H * vW,
+        vTop: hallT - V_BANDS * bandH - SEC_V * hH,
+        vBottom: hallB + V_BANDS * bandH + SEC_V * hH,
       };
     }
 
-    function cellRect(L, q, band, gi, gj) {
-      const { rW, rH, hallL, hallR, hallT, hallB, leftSecs, rightSecs } = L;
+    function cellRect(L, q, hb, vb, gi, gj) {
+      const { rW, rH, hallL, hallR, hallT, hallB, leftSecs, rightSecs, topSecs, botSecs } = L;
       let x, y;
 
-      if (q === "nw" || q === "ne") y = hallT - (gj + 1) * rH;
-      else y = hallB + gj * rH;
-
+      // Horizontal placement
       if (q === "nw" || q === "sw") {
-        if (band === 0) x = hallL - (gi + 1) * rW;
-        else x = leftSecs[band - 1].L - (gi + 1) * rW;
+        x = hb === 0 ? hallL - (gi + 1) * rW : leftSecs[hb - 1].L - (gi + 1) * rW;
       } else {
-        if (band === 0) x = hallR + gi * rW;
-        else x = rightSecs[band - 1].R + gi * rW;
+        x = hb === 0 ? hallR + gi * rW : rightSecs[hb - 1].R + gi * rW;
+      }
+
+      // Vertical placement
+      if (q === "nw" || q === "ne") {
+        y = vb === 0 ? hallT - (gj + 1) * rH : topSecs[vb - 1].T - (gj + 1) * rH;
+      } else {
+        y = vb === 0 ? hallB + gj * rH : botSecs[vb - 1].B + gj * rH;
       }
 
       return { x, y, w: rW, h: rH };
@@ -249,36 +237,28 @@
       return h >>> 0;
     }
 
-    /** Contiguous neighbors in the same room block (same q + band). */
     function neighborsOf(room) {
       const out = [];
-      const deltas = [
-        [1, 0], [-1, 0], [0, 1], [0, -1],
-      ];
-      for (const [di, dj] of deltas) {
-        const gi = room.gi + di;
-        const gj = room.gj + dj;
-        if (gi < 0 || gi >= ROOMS_PER_BAND || gj < 0 || gj >= ROWS) continue;
-        const id = `${room.q}-b${room.band}-${gi}-${gj}`;
+      for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const gi = room.gi + di, gj = room.gj + dj;
+        if (gi < 0 || gi >= CELL || gj < 0 || gj >= CELL) continue;
+        const id = `${room.q}-h${room.hb}-v${room.vb}-${gi}-${gj}`;
         if (byId[id]) out.push(byId[id]);
       }
       return out;
     }
 
     function unionRect(a, b) {
-      const x = Math.min(a.x, b.x);
-      const y = Math.min(a.y, b.y);
-      const r = Math.max(a.x + a.w, b.x + b.w);
-      const btm = Math.max(a.y + a.h, b.y + b.h);
+      const x = Math.min(a.x, b.x), y = Math.min(a.y, b.y);
+      const r = Math.max(a.x + a.w, b.x + b.w), btm = Math.max(a.y + a.h, b.y + b.h);
       return { x, y, w: r - x, h: btm - y };
     }
 
-    /** Full rectangle of a (quad, band) block between halls. */
-    function segmentRect(L, q, band) {
+    function segmentRect(L, q, hb, vb) {
       let rect = null;
-      for (let gj = 0; gj < ROWS; gj++) {
-        for (let gi = 0; gi < ROOMS_PER_BAND; gi++) {
-          const c = cellRect(L, q, band, gi, gj);
+      for (let gj = 0; gj < CELL; gj++) {
+        for (let gi = 0; gi < CELL; gi++) {
+          const c = cellRect(L, q, hb, vb, gi, gj);
           const piece = { x: c.x, y: c.y, w: c.w, h: c.h };
           rect = rect ? unionRect(rect, piece) : piece;
         }
@@ -293,12 +273,11 @@
       hallPockets = [];
 
       for (const r of rooms) {
-        const cell = cellRect(L, r.q, r.band, r.gi, r.gj);
+        const cell = cellRect(L, r.q, r.hb, r.vb, r.gi, r.gj);
         r.bx = cell.x; r.by = cell.y; r.bw = cell.w; r.bh = cell.h;
         r.absorbIds = [];
-        const cx = cell.x + cell.w / 2;
-        const cy = cell.y + cell.h / 2;
-        r.prox = Math.max(0, 1 - Math.hypot(cx - hall.cx, cy - hall.cy) / 400);
+        const cx = cell.x + cell.w / 2, cy = cell.y + cell.h / 2;
+        r.prox = Math.max(0, 1 - Math.hypot(cx - hall.cx, cy - hall.cy) / 420);
         r.visibleFrac = visibleFraction(r.bx, r.by, r.bw, r.bh);
         r.hidden = r.visibleFrac < VISIBLE_MIN;
       }
@@ -328,52 +307,46 @@
       }
 
       for (const q of QUADS) {
-        for (let band = 0; band < BANDS; band++) {
-          const segRooms = rooms.filter((r) => r.q === q && r.band === band);
-          const orphans = segRooms.filter((r) => r.hidden && !absorbed.has(r.id));
-          if (!orphans.length) continue;
+        for (let hb = 0; hb < H_BANDS; hb++) {
+          for (let vb = 0; vb < V_BANDS; vb++) {
+            const segRooms = rooms.filter((r) => r.q === q && r.hb === hb && r.vb === vb);
+            const orphans = segRooms.filter((r) => r.hidden && !absorbed.has(r.id));
+            if (!orphans.length) continue;
 
-          const visibles = segRooms.filter((r) => !r.hidden);
-          let rect;
-          if (visibles.length === 0) {
-            rect = segmentRect(L, q, band);
-          } else {
-            rect = { x: orphans[0].bx, y: orphans[0].by, w: orphans[0].bw, h: orphans[0].bh };
-            for (let i = 1; i < orphans.length; i++) {
-              const o = orphans[i];
-              rect = unionRect(rect, { x: o.bx, y: o.by, w: o.bw, h: o.bh });
+            const visibles = segRooms.filter((r) => !r.hidden);
+            let rect;
+            if (visibles.length === 0) {
+              rect = segmentRect(L, q, hb, vb);
+            } else {
+              rect = { x: orphans[0].bx, y: orphans[0].by, w: orphans[0].bw, h: orphans[0].bh };
+              for (let i = 1; i < orphans.length; i++) {
+                const o = orphans[i];
+                rect = unionRect(rect, { x: o.bx, y: o.by, w: o.bw, h: o.bh });
+              }
             }
-          }
 
-          const frac = visibleFraction(rect.x, rect.y, rect.w, rect.h);
-          if (frac < VISIBLE_MIN) {
-            // Corner void between circle and halls — fill with hall color
-            if (frac > 0.02) {
-              hallPockets.push({ x: rect.x, y: rect.y, w: rect.w, h: rect.h });
+            const frac = visibleFraction(rect.x, rect.y, rect.w, rect.h);
+            if (frac < VISIBLE_MIN) {
+              if (frac > 0.02) hallPockets.push({ x: rect.x, y: rect.y, w: rect.w, h: rect.h });
+              continue;
             }
-            continue;
-          }
 
-          fillers.push({
-            id: `fill-${q}-b${band}`,
-            name: `${q.toUpperCase()} ·`,
-            q, band,
-            hue: (QUAD_HUE[q] + band * 40 + 15) % 360,
-            x: rect.x, y: rect.y, w: rect.w, h: rect.h,
-            lx: rect.x, ly: rect.y, lw: rect.w, lh: rect.h,
-            prox: Math.max(...orphans.map((o) => o.prox)),
-            hidden: false,
-          });
+            fillers.push({
+              id: `fill-${q}-h${hb}-v${vb}`,
+              name: `${q.toUpperCase()} ·`,
+              hue: (QUAD_HUE[q] + hb * 30 + vb * 20) % 360,
+              x: rect.x, y: rect.y, w: rect.w, h: rect.h,
+              lx: rect.x, ly: rect.y, lw: rect.w, lh: rect.h,
+              prox: Math.max(...orphans.map((o) => o.prox)),
+              hidden: false,
+            });
+          }
         }
       }
 
       if (snap) {
-        for (const r of rooms) {
-          r.lx = r.x; r.ly = r.y; r.lw = r.w; r.lh = r.h;
-        }
-        for (const f of fillers) {
-          f.lx = f.x; f.ly = f.y; f.lw = f.w; f.lh = f.h;
-        }
+        for (const r of rooms) { r.lx = r.x; r.ly = r.y; r.lw = r.w; r.lh = r.h; }
+        for (const f of fillers) { f.lx = f.x; f.ly = f.y; f.lw = f.w; f.lh = f.h; }
       }
     }
 
@@ -413,13 +386,11 @@
       const { sx, sy } = pxScale();
       const hole = toPx(HOLE.cx, HOLE.cy);
       const hs = (sx + sy) / 2;
-
       ctx.beginPath();
       ctx.arc(hole.x, hole.y, KEEP_OUT * hs, 0, Math.PI * 2);
       ctx.arc(hole.x, hole.y, HOLE.r * hs, 0, Math.PI * 2, true);
       ctx.fillStyle = HALL_COLOR;
       ctx.fill("evenodd");
-
       ctx.beginPath();
       ctx.arc(hole.x, hole.y, HOLE.r * hs, 0, Math.PI * 2);
       ctx.fillStyle = "#0e1116";
@@ -455,7 +426,12 @@
       ctx.ellipse(c.x, c.y, OVAL.rx * sx, OVAL.ry * sy, 0, 0, Math.PI * 2);
       ctx.clip();
 
+      // Full horizontal corridors: central + secondary top/bottom
       fillHallRect(L.hLeft, L.hallT, L.hRight - L.hLeft, L.hH);
+      for (const s of L.topSecs) fillHallRect(L.hLeft, s.T, L.hRight - L.hLeft, L.hH);
+      for (const s of L.botSecs) fillHallRect(L.hLeft, s.T, L.hRight - L.hLeft, L.hH);
+
+      // Full vertical corridors: central + secondary left/right
       const vH = L.vBottom - L.vTop;
       fillHallRect(L.hallL, L.vTop, L.vW, vH);
       for (const s of L.leftSecs) fillHallRect(s.L, L.vTop, L.vW, vH);
@@ -476,23 +452,19 @@
 
     function drawRoomClipped(room, t) {
       if (room.hidden) return;
-
       const tl = toPx(room.lx, room.ly);
       const br = toPx(room.lx + room.lw, room.ly + room.lh);
-      const rw = br.x - tl.x;
-      const rh = br.y - tl.y;
+      const rw = br.x - tl.x, rh = br.y - tl.y;
       const label = toPx(room.lx + room.lw / 2, room.ly + room.lh / 2);
 
       ctx.save();
       roomsClipPath();
       ctx.clip("evenodd");
-
       ctx.fillStyle = roomFill(room, t);
       ctx.fillRect(tl.x, tl.y, rw, rh);
       ctx.strokeStyle = "rgba(255,255,255,0.12)";
       ctx.lineWidth = 1;
       ctx.strokeRect(tl.x, tl.y, rw, rh);
-
       if (Math.min(rw, rh) > 42) {
         ctx.fillStyle = "rgba(255,255,255,0.45)";
         ctx.font = `500 ${Math.max(7, Math.min(10, Math.min(rw, rh) * 0.1))}px "Segoe UI", sans-serif`;
@@ -500,7 +472,6 @@
         ctx.textBaseline = "middle";
         ctx.fillText(room.name, label.x, label.y);
       }
-
       ctx.restore();
     }
 
@@ -508,15 +479,9 @@
       hall.cx = hall.tx;
       hall.cy = hall.ty;
       hueShift = (hueShift + 0.12) % 360;
-
       layoutFromHall(false);
-
-      for (const r of rooms) {
-        r.lx = r.x; r.ly = r.y; r.lw = r.w; r.lh = r.h;
-      }
-      for (const f of fillers) {
-        f.lx = f.x; f.ly = f.y; f.lw = f.w; f.lh = f.h;
-      }
+      for (const r of rooms) { r.lx = r.x; r.ly = r.y; r.lw = r.w; r.lh = r.h; }
+      for (const f of fillers) { f.lx = f.x; f.ly = f.y; f.lw = f.w; f.lh = f.h; }
     }
 
     function frame(t) {
