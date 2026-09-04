@@ -299,7 +299,7 @@
     const SPACE = { w: 1000, h: 740 };
     let OUTER = null;
     let ISLAND = null;
-    let ISLAND_OUTER = null;
+    let ISLAND_OVAL = null;
     let OUTER_BOUNDS = { minX: 40, maxX: 960, minY: 40, maxY: 700 };
     let pathOuterPx = null, pathIslandPx = null, pathIslandOuterPx = null, pathIslandVoidPx = null, pathInnerHallPx = null, pathRingPx = null;
     // Uniform scale + letterbox offsets (preserves contour proportions)
@@ -430,25 +430,36 @@
       return inside;
     }
 
-    /** Outset polygon away from centroid by dist (norm units ≈ hall thickness). */
-    function outsetPolygon(poly, dist) {
-      let cx = 0, cy = 0;
-      for (const [x, y] of poly) { cx += x; cy += y; }
-      cx /= poly.length;
-      cy /= poly.length;
-      return poly.map(([x, y]) => {
-        const dx = x - cx, dy = y - cy;
-        const len = Math.hypot(dx, dy);
-        if (len < 1e-6) return [x, y];
-        return [x + (dx / len) * dist, y + (dy / len) * dist];
-      });
+    /** Oval around island bbox + hall padding (outward offset). */
+    function computeIslandOval(island, padding) {
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const [x, y] of island) {
+        if (x < minX) minX = x; if (x > maxX) maxX = x;
+        if (y < minY) minY = y; if (y > maxY) maxY = y;
+      }
+      return {
+        cx: (minX + maxX) / 2,
+        cy: (minY + maxY) / 2,
+        rx: (maxX - minX) / 2 + padding,
+        ry: (maxY - minY) / 2 + padding,
+      };
+    }
+
+    function inEllipse(x, y, oval) {
+      const dx = (x - oval.cx) / oval.rx;
+      const dy = (y - oval.cy) / oval.ry;
+      return dx * dx + dy * dy <= 1;
+    }
+
+    function addEllipseToPath(path, oval, ox, oy, s) {
+      path.ellipse(ox + oval.cx * s, oy + oval.cy * s, oval.rx * s, oval.ry * s, 0, 0, Math.PI * 2);
     }
 
     function buildPixelPaths() {
       if (!OUTER || !ISLAND || !W || !view.s) return;
       const { ox, oy, s } = view;
       const hallOutset = metrics ? metrics.vW : HALL_REF;
-      ISLAND_OUTER = outsetPolygon(ISLAND, hallOutset);
+      ISLAND_OVAL = computeIslandOval(ISLAND, hallOutset);
 
       function addPoly(path, poly) {
         path.moveTo(ox + poly[0][0] * s, oy + poly[0][1] * s);
@@ -460,16 +471,21 @@
       pathOuterPx = new Path2D(); addPoly(pathOuterPx, OUTER);
       pathIslandVoidPx = new Path2D(); addPoly(pathIslandVoidPx, ISLAND);
       pathIslandPx = pathIslandVoidPx;
-      pathIslandOuterPx = new Path2D(); addPoly(pathIslandOuterPx, ISLAND_OUTER);
+      pathIslandOuterPx = new Path2D();
+      addEllipseToPath(pathIslandOuterPx, ISLAND_OVAL, ox, oy, s);
       pathInnerHallPx = new Path2D();
-      addPoly(pathInnerHallPx, ISLAND_OUTER);
+      addEllipseToPath(pathInnerHallPx, ISLAND_OVAL, ox, oy, s);
       addPoly(pathInnerHallPx, ISLAND);
-      pathRingPx = new Path2D(); addPoly(pathRingPx, OUTER); addPoly(pathRingPx, ISLAND_OUTER);
+      pathRingPx = new Path2D();
+      addPoly(pathRingPx, OUTER);
+      addEllipseToPath(pathRingPx, ISLAND_OVAL, ox, oy, s);
     }
 
     function inOuter(x, y) { return OUTER ? pointInPoly(x, y, OUTER) : false; }
     function inIslandVoid(x, y) { return ISLAND ? pointInPoly(x, y, ISLAND) : false; }
-    function inIslandExclusion(x, y) { return ISLAND_OUTER ? pointInPoly(x, y, ISLAND_OUTER) : inIslandVoid(x, y); }
+    function inIslandExclusion(x, y) {
+      return ISLAND_OVAL ? inEllipse(x, y, ISLAND_OVAL) : inIslandVoid(x, y);
+    }
     function isVisiblePoint(x, y) { return inOuter(x, y) && !inIslandExclusion(x, y); }
     function visibleFraction(x, y, w, h) {
       const N = 10;
