@@ -1,20 +1,33 @@
 # space_programmer
 
-Interactive floor-plan sketch over a real Revit area contour.
+Interactive floor-plan sketch over a real Revit area contour, with Liverpool mall store proportions.
 
 ## Run
 
-Open `index.html` in a browser:
-
 ```powershell
-start index.html
+start index.html                  # contour + mall proportions
+start index-contour-finalized.html  # frozen equal-grid baseline
 ```
 
-## Geometry
+## Files
 
-- Outer clip: Area `1927977` contour (`contour.json` / `contour-data.js`)
-- Inner clip: largest central island from the same export
-- Orthogonal halls + square rooms (1.5× hall thickness)
+| File | Purpose |
+|------|---------|
+| `index.html` | Live demo: Revit contour + weighted store grid |
+| `index-contour-finalized.html` | Locked baseline (uniform room sizes) |
+| `contour.json` / `contour-data.js` | Area 1927977 outer + central island |
+| `mall-proportions.js` | Store size weights from Liverpool spatial diagrams |
+
+## Proportions source
+
+Derived from `InRevitExistingAIRendererWithAPI/sources/DIAGRAMAS DE REL ESPACIALES.pdf`:
+
+- **NW** Hogar — anchor Muebles / Línea blanca (large blocks)
+- **NE** Mujer — anchor Cosméticos / Zapatos mujer
+- **SW** Deportes — anchor Ropa deportiva / calzado
+- **SE** Alimentos — anchor Gourmet / Restaurante (~50% of food stack)
+
+Tier scale: anchor 2× · primary 1.5× · standard 1× · specialty 0.5×
 
 ## License
 

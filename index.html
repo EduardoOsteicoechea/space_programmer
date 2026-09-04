@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>space_programmer</title>
+  <title>space_programmer — mall proportions</title>
   <style>
     :root { --bg: #0e1116; }
 
@@ -17,21 +17,201 @@
     }
 
     body {
-      display: grid;
-      place-items: center;
+      height: 100%;
       background:
         radial-gradient(ellipse 80% 60% at 20% 10%, #1a2430 0%, transparent 55%),
         radial-gradient(ellipse 70% 50% at 90% 80%, #1c1812 0%, transparent 50%),
         var(--bg);
     }
 
+    .shell {
+      display: flex;
+      width: 100vw;
+      height: 100vh;
+      align-items: stretch;
+    }
+
+    .side-panel {
+      flex: 0 0 auto;
+      height: 100%;
+      overflow-x: hidden;
+      overflow-y: auto;
+      padding: 10px;
+      border-radius: 0;
+      background: rgba(8, 10, 14, 0.96);
+      border: none;
+      border-right: 1px solid rgba(255, 255, 255, 0.08);
+      color: #c8d2dc;
+    }
+
+    .legend-panel {
+      width: 168px;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .legend-block {
+      flex: 0 0 auto;
+    }
+
+    .room-creator {
+      flex: 0 0 auto;
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .room-creator label {
+      display: block;
+      margin: 8px 0 4px;
+      font-size: 12px;
+      color: #8a96a5;
+    }
+
+    .room-creator select,
+    .room-creator input {
+      width: 100%;
+      padding: 6px 8px;
+      border-radius: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: #1a2028;
+      color: #e8edf3;
+      font-size: 12px;
+      font-family: inherit;
+    }
+
+    .room-creator button {
+      width: 100%;
+      margin-top: 10px;
+      padding: 8px;
+      border: none;
+      border-radius: 4px;
+      background: #3d6b9e;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    .room-creator button:hover { background: #4a7cb3; }
+    .room-creator button.active { background: #c45c26; }
+    .room-creator .hint {
+      margin-top: 8px;
+      font-size: 11px;
+      color: #8a96a5;
+      line-height: 1.35;
+    }
+
+    .stage.placing { cursor: copy; }
+    .stage.placing-drag { cursor: grabbing; }
+
+    .sections-panel {
+      width: 220px;
+      border-right: none;
+      border-left: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .side-panel h2 {
+      margin: 0 0 10px;
+      color: #eef2f6;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .legend-items {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 20px;
+    }
+
+    .legend-swatch {
+      flex: 0 0 14px;
+      width: 14px;
+      height: 14px;
+      border-radius: 2px;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+    }
+
+    .legend-label {
+      font-size: 14px;
+      color: #e8edf3;
+      line-height: 1.2;
+    }
+
+    .section-block {
+      margin-bottom: 14px;
+    }
+
+    .section-block:last-child { margin-bottom: 0; }
+
+    .section-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #eef2f6;
+    }
+
+    .store-list {
+      list-style: none;
+      margin: 0;
+      padding: 0 0 0 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .store-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 6px;
+      font-size: 12px;
+      line-height: 1.3;
+    }
+
+    .store-name {
+      color: #b8c2ce;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .store-stats {
+      flex: 0 0 auto;
+      color: #8a96a5;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    .sections-total {
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      font-size: 12px;
+      color: #8a96a5;
+    }
+
     .stage {
       position: relative;
-      /* Match contour space (1000×740) so the plan is not stretched */
-      width: min(98vw, 1400px, calc(96vh * 1000 / 740));
-      aspect-ratio: 1000 / 740;
-      height: auto;
-      max-height: 96vh;
+      flex: 1 1 auto;
+      min-width: 0;
+      height: 100%;
       overflow: hidden;
       background: #14181e;
       cursor: crosshair;
@@ -42,14 +222,63 @@
       width: 100%;
       height: 100%;
     }
+
+    @media (max-width: 900px) {
+      .shell {
+        flex-direction: column;
+        height: 100vh;
+      }
+      .legend-panel, .sections-panel {
+        width: 100%;
+        height: auto;
+        max-height: 140px;
+        flex: 0 0 auto;
+        border-left: none;
+        border-right: none;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      }
+      .sections-panel {
+        border-bottom: none;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        order: 3;
+      }
+      .stage {
+        flex: 1 1 auto;
+        order: 2;
+        min-height: 0;
+      }
+    }
   </style>
 </head>
 <body>
-  <div class="stage" id="stage">
-    <canvas id="c"></canvas>
+  <div class="shell">
+    <aside class="side-panel legend-panel">
+      <div class="legend-block" id="legend"></div>
+      <div class="room-creator" id="room-creator">
+        <h2>Nueva tienda</h2>
+        <label for="creator-q">Universo</label>
+        <select id="creator-q"></select>
+        <label for="creator-tier">Tipo</label>
+        <select id="creator-tier">
+          <option value="anchor">Ancla (4 celdas)</option>
+          <option value="primary">Primaria (2 celdas)</option>
+          <option value="standard" selected>Estándar (1 celda)</option>
+          <option value="specialty">Especialidad (1 celda)</option>
+        </select>
+        <label for="creator-name">Nombre</label>
+        <input id="creator-name" type="text" placeholder="Ej. 101 Muebles" maxlength="24" />
+        <button type="button" id="creator-btn">Crear</button>
+        <p class="hint" id="creator-hint">Selecciona tipo y pulsa Crear, luego arrastra al plano.</p>
+      </div>
+    </aside>
+    <div class="stage" id="stage">
+      <canvas id="c"></canvas>
+    </div>
+    <aside class="side-panel sections-panel" id="sections"></aside>
   </div>
 
   <script src="contour-data.js"></script>
+  <script src="mall-proportions.js"></script>
   <script>
     const canvas = document.getElementById("c");
     const ctx = canvas.getContext("2d");
@@ -71,29 +300,52 @@
     const SEC_H = H_BANDS - 1;
     const SEC_V = V_BANDS - 1;
 
+    const MALL = window.MALL_PROPORTIONS;
+    const TIERS = MALL.tiers;
+
     const hall = { cx: 499, cy: 313, tx: 499, ty: 313 };
-    const QUAD_HUE = { nw: 210, ne: 48, sw: 38, se: 280 };
     const QUADS = ["nw", "ne", "sw", "se"];
     const HALL_COLOR = "rgb(78, 88, 102)";
+    const FLOOR_W_M = 112.442;
+    const FLOOR_H_M = 86.076;
+    const M2_SCALE = (FLOOR_W_M / SPACE.w) * (FLOOR_H_M / SPACE.h);
 
-    const roomDefs = [];
-    for (const q of QUADS) {
-      for (let hb = 0; hb < H_BANDS; hb++) {
-        for (let vb = 0; vb < V_BANDS; vb++) {
-          for (let gj = 0; gj < CELL; gj++) {
-            for (let gi = 0; gi < CELL; gi++) {
-              const i = ((hb * V_BANDS + vb) * CELL + gj) * CELL + gi;
-              roomDefs.push({
-                id: `${q}-h${hb}-v${vb}-${gi}-${gj}`,
-                name: `${q.toUpperCase()} ${i + 1}`,
-                q, hb, vb, gi, gj,
-                hue: (QUAD_HUE[q] + i * 5 + hb * 28 + vb * 18) % 360,
-              });
+    function tierLightness(tier) {
+      if (tier === "anchor") return 36;
+      if (tier === "primary") return 42;
+      if (tier === "standard") return 48;
+      if (tier === "specialty") return 54;
+      return 58;
+    }
+
+    function buildRoomDefs() {
+      const roomDefs = [];
+      for (const q of QUADS) {
+        const u = MALL.quadrants[q];
+        for (let hb = 0; hb < H_BANDS; hb++) {
+          for (let vb = 0; vb < V_BANDS; vb++) {
+            for (let gj = 0; gj < CELL; gj++) {
+              for (let gi = 0; gi < CELL; gi++) {
+                const i = ((hb * V_BANDS + vb) * CELL + gj) * CELL + gi;
+                const name = u.sections[gj][gi];
+                const tier = u.tiers[gj][gi];
+                roomDefs.push({
+                  id: `${q}-h${hb}-v${vb}-${gi}-${gj}`,
+                  name,
+                  q, hb, vb, gi, gj,
+                  tier,
+                  universe: u.id,
+                  baseHue: u.hue,
+                });
+              }
             }
           }
         }
       }
+      return roomDefs;
     }
+
+    const roomDefs = buildRoomDefs();
 
     const rooms = roomDefs.map((d) => ({
       ...d,
@@ -106,7 +358,13 @@
 
     let fillers = [];
     let hallPockets = [];
+    let customRooms = [];
+    let suppressedIds = new Set();
+    let placement = null;
+    let customSeq = 0;
     let dpr = 1, W = 0, H = 0, metrics = null;
+
+    const TIER_CELLS = { anchor: 4, primary: 2, standard: 1, specialty: 1 };
 
     function resize() {
       const rect = stage.getBoundingClientRect();
@@ -293,25 +551,52 @@
       };
     }
 
-    function cellRect(L, q, hb, vb, gi, gj) {
+    function gridWeights(q) {
+      const u = MALL.quadrants[q];
+      return { cols: u.cols, rows: u.rows };
+    }
+
+    function weightedSpan(weights, index, totalUnits, unitPx) {
+      const sum = weights.reduce((s, w) => s + w, 0);
+      const scale = (totalUnits * unitPx) / sum;
+      let offset = 0;
+      for (let i = 0; i < index; i++) offset += weights[i] * scale;
+      return { offset, size: weights[index] * scale };
+    }
+
+    function segmentOrigin(L, q, hb, vb) {
       const { rW, rH, hallL, hallR, hallT, hallB, leftSecs, rightSecs, topSecs, botSecs } = L;
-      let x, y;
+      const bandW = CELL * rW;
+      const bandH = CELL * rH;
+      let ox, oy;
 
-      // Horizontal placement
       if (q === "nw" || q === "sw") {
-        x = hb === 0 ? hallL - (gi + 1) * rW : leftSecs[hb - 1].L - (gi + 1) * rW;
+        ox = hb === 0 ? hallL - bandW : leftSecs[hb - 1].L - bandW;
       } else {
-        x = hb === 0 ? hallR + gi * rW : rightSecs[hb - 1].R + gi * rW;
+        ox = hb === 0 ? hallR : rightSecs[hb - 1].R;
       }
 
-      // Vertical placement
       if (q === "nw" || q === "ne") {
-        y = vb === 0 ? hallT - (gj + 1) * rH : topSecs[vb - 1].T - (gj + 1) * rH;
+        oy = vb === 0 ? hallT - bandH : topSecs[vb - 1].T - bandH;
       } else {
-        y = vb === 0 ? hallB + gj * rH : botSecs[vb - 1].B + gj * rH;
+        oy = vb === 0 ? hallB : botSecs[vb - 1].B;
       }
+      return { ox, oy, bandW, bandH };
+    }
 
-      return { x, y, w: rW, h: rH };
+    function cellRect(L, q, hb, vb, gi, gj) {
+      const { rW, rH } = L;
+      const { cols, rows } = gridWeights(q);
+      const { ox, oy, bandW, bandH } = segmentOrigin(L, q, hb, vb);
+      const col = weightedSpan(cols, gi, CELL, rW);
+      const row = weightedSpan(rows, gj, CELL, rH);
+
+      let x = ox + col.offset;
+      let y = oy + row.offset;
+      if (q === "nw" || q === "sw") x = ox + (bandW - col.offset - col.size);
+      if (q === "nw" || q === "ne") y = oy + (bandH - row.offset - row.size);
+
+      return { x, y, w: col.size, h: row.size };
     }
 
     function hashStr(s) {
@@ -353,6 +638,72 @@
       return rect;
     }
 
+    function expandCluster(start, count) {
+      if (!start) return [];
+      const queue = [start];
+      const seen = new Set([start.id]);
+      const out = [start];
+      while (out.length < count && queue.length) {
+        const cur = queue.shift();
+        for (const n of neighborsOf(cur)) {
+          if (n.q !== start.q || n.hb !== start.hb || n.vb !== start.vb) continue;
+          if (seen.has(n.id) || suppressedIds.has(n.id)) continue;
+          seen.add(n.id);
+          out.push(n);
+          queue.push(n);
+          if (out.length >= count) break;
+        }
+      }
+      return out;
+    }
+
+    function findCellAt(nx, ny) {
+      for (const r of rooms) {
+        if (suppressedIds.has(r.id)) continue;
+        if (nx >= r.bx && nx <= r.bx + r.bw && ny >= r.by && ny <= r.by + r.bh) return r;
+      }
+      return null;
+    }
+
+    function clusterRect(cluster) {
+      let rect = null;
+      for (const r of cluster) {
+        const piece = { x: r.bx, y: r.by, w: r.bw, h: r.bh };
+        rect = rect ? unionRect(rect, piece) : piece;
+      }
+      return rect;
+    }
+
+    function previewCluster(nx, ny, tier) {
+      const start = findCellAt(nx, ny);
+      if (!start || !isVisiblePoint(nx, ny)) return null;
+      const cluster = expandCluster(start, TIER_CELLS[tier] || 1);
+      const rect = clusterRect(cluster);
+      if (visibleFraction(rect.x, rect.y, rect.w, rect.h) < 0.01) return null;
+      return { cluster, rect };
+    }
+
+    function placeCustomRoom(nx, ny, spec) {
+      const prev = previewCluster(nx, ny, spec.tier);
+      if (!prev) return false;
+      for (const r of prev.cluster) suppressedIds.add(r.id);
+      customSeq += 1;
+      customRooms.push({
+        id: `custom-${customSeq}`,
+        name: spec.name || `Nueva ${customSeq}`,
+        q: spec.q,
+        tier: spec.tier,
+        baseHue: spec.baseHue,
+        clusterIds: prev.cluster.map((r) => r.id),
+        x: prev.rect.x, y: prev.rect.y, w: prev.rect.w, h: prev.rect.h,
+        lx: prev.rect.x, ly: prev.rect.y, lw: prev.rect.w, lh: prev.rect.h,
+        hidden: false,
+        isCustom: true,
+        prox: 1,
+      });
+      return true;
+    }
+
     function layoutFromHall(snap) {
       if (!metrics) metrics = computeMetrics();
       const L = hallLayout(hall.cx, hall.cy);
@@ -365,13 +716,14 @@
         r.absorbIds = [];
         const cx = cell.x + cell.w / 2, cy = cell.y + cell.h / 2;
         r.prox = Math.max(0, 1 - Math.hypot(cx - hall.cx, cy - hall.cy) / 420);
-        r.hidden = touchesContour(r.bx, r.by, r.bw, r.bh);
+        r.hidden = suppressedIds.has(r.id) || touchesContour(r.bx, r.by, r.bw, r.bh);
       }
 
       // Hidden → grow right, else left, else up, else down
       const absorbed = new Set();
       for (const r of rooms) {
         if (!r.hidden) continue;
+        if (suppressedIds.has(r.id)) continue;
         const pick = preferredNeighbor(r);
         if (!pick) continue;
         pick.absorbIds.push(r.id);
@@ -420,8 +772,10 @@
 
             fillers.push({
               id: `fill-${q}-h${hb}-v${vb}`,
-              name: `${q.toUpperCase()} ·`,
-              hue: (QUAD_HUE[q] + hb * 30 + vb * 20) % 360,
+              name: `${MALL.quadrants[q].label} ·`,
+              q,
+              baseHue: MALL.quadrants[q].hue,
+              tier: "standard",
               x: rect.x, y: rect.y, w: rect.w, h: rect.h,
               lx: rect.x, ly: rect.y, lw: rect.w, lh: rect.h,
               prox: Math.max(...orphans.map((o) => o.prox)),
@@ -435,15 +789,66 @@
         for (const r of rooms) { r.lx = r.x; r.ly = r.y; r.lw = r.w; r.lh = r.h; }
         for (const f of fillers) { f.lx = f.x; f.ly = f.y; f.lw = f.w; f.lh = f.h; }
       }
+      refreshCustomRoomRects();
+      for (const c of customRooms) {
+        c.lx = c.x; c.ly = c.y; c.lw = c.w; c.lh = c.h;
+      }
     }
 
-    stage.addEventListener("pointermove", (e) => {
+    function refreshCustomRoomRects() {
+      for (const c of customRooms) {
+        const cells = c.clusterIds.map((id) => byId[id]).filter(Boolean);
+        if (!cells.length) continue;
+        const rect = clusterRect(cells);
+        c.x = rect.x; c.y = rect.y; c.w = rect.w; c.h = rect.h;
+      }
+    }
+
+    function pointerNorm(e) {
       const rect = stage.getBoundingClientRect();
-      const nx = (e.clientX - rect.left - view.ox) / view.s;
-      const ny = (e.clientY - rect.top - view.oy) / view.s;
+      return {
+        nx: (e.clientX - rect.left - view.ox) / view.s,
+        ny: (e.clientY - rect.top - view.oy) / view.s,
+      };
+    }
+
+    stage.addEventListener("pointerdown", (e) => {
+      if (!placement) return;
+      placement.dragging = true;
+      stage.setPointerCapture(e.pointerId);
+      stage.classList.add("placing-drag");
+      const { nx, ny } = pointerNorm(e);
+      placement.nx = nx;
+      placement.ny = ny;
+    });
+
+    stage.addEventListener("pointermove", (e) => {
+      const { nx, ny } = pointerNorm(e);
+      if (placement) {
+        placement.nx = nx;
+        placement.ny = ny;
+        return;
+      }
       const b = hallBounds();
       hall.tx = Math.max(b.minX, Math.min(b.maxX, nx));
       hall.ty = Math.max(b.minY, Math.min(b.maxY, ny));
+    });
+
+    stage.addEventListener("pointerup", (e) => {
+      if (!placement) return;
+      if (placement.dragging) {
+        const ok = placeCustomRoom(placement.nx, placement.ny, placement.spec);
+        if (ok) {
+          placement = null;
+          stage.classList.remove("placing", "placing-drag");
+          document.getElementById("creator-btn").classList.remove("active");
+          document.getElementById("creator-btn").textContent = "Crear";
+          document.getElementById("creator-hint").textContent = "Selecciona tipo y pulsa Crear, luego arrastra al plano.";
+        }
+      }
+      placement.dragging = false;
+      stage.classList.remove("placing-drag");
+      try { stage.releasePointerCapture(e.pointerId); } catch (_) {}
     });
 
     function clipToContourRing() {
@@ -452,8 +857,13 @@
       return true;
     }
 
+    function storeColor(baseHue, tier) {
+      const l = tierLightness(tier);
+      return `hsla(${baseHue + (l - 42)}, 52%, ${l}%, 0.88)`;
+    }
+
     function roomFill(room) {
-      return `hsla(${room.hue}, 55%, 42%, 0.85)`;
+      return storeColor(room.baseHue ?? room.hue ?? 0, room.tier || "standard");
     }
 
     function fillHallRect(x, y, w, h) {
@@ -529,13 +939,29 @@
       ctx.strokeStyle = "rgba(255,255,255,0.12)";
       ctx.lineWidth = 1;
       ctx.strokeRect(tl.x, tl.y, rw, rh);
-      if (Math.min(rw, rh) > 42) {
-        ctx.fillStyle = "rgba(255,255,255,0.45)";
-        ctx.font = `500 ${Math.max(7, Math.min(10, Math.min(rw, rh) * 0.1))}px "Segoe UI", sans-serif`;
+      if (Math.min(rw, rh) > 28) {
+        ctx.fillStyle = "rgba(255,255,255,0.5)";
+        const fs = Math.max(6, Math.min(9, Math.min(rw, rh) * 0.11));
+        ctx.font = `500 ${fs}px "Segoe UI", sans-serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(room.name, label.x, label.y);
       }
+      ctx.restore();
+    }
+
+    function drawPlacementGhost() {
+      const prev = previewCluster(placement.nx, placement.ny, placement.spec.tier);
+      if (!prev) return;
+      const tl = toPx(prev.rect.x, prev.rect.y);
+      const br = toPx(prev.rect.x + prev.rect.w, prev.rect.y + prev.rect.h);
+      ctx.save();
+      ctx.fillStyle = storeColor(placement.spec.baseHue, placement.spec.tier).replace("0.88", "0.45");
+      ctx.fillRect(tl.x, tl.y, br.x - tl.x, br.y - tl.y);
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 4]);
+      ctx.strokeRect(tl.x, tl.y, br.x - tl.x, br.y - tl.y);
       ctx.restore();
     }
 
@@ -545,6 +971,7 @@
       layoutFromHall(false);
       for (const r of rooms) { r.lx = r.x; r.ly = r.y; r.lw = r.w; r.lh = r.h; }
       for (const f of fillers) { f.lx = f.x; f.ly = f.y; f.lw = f.w; f.lh = f.h; }
+      renderSectionsPanel();
     }
 
     function frame(t) {
@@ -558,6 +985,8 @@
       const sorted = [...rooms].sort((a, b) => a.prox - b.prox);
       for (const room of sorted) drawRoomClipped(room, t);
       for (const f of fillers) drawRoomClipped(f, t);
+      for (const c of customRooms) drawRoomClipped(c, t);
+      if (placement) drawPlacementGhost();
       // Island on top so hall arms don't paint over it
       if (pathIslandPx) {
         ctx.fillStyle = HALL_COLOR;
@@ -574,6 +1003,120 @@
       requestAnimationFrame(frame);
     }
 
+    function normAreaToM2(w, h) {
+      return w * h * M2_SCALE;
+    }
+
+    function collectStoreAreas() {
+      const bySection = {};
+      for (const q of QUADS) {
+        const u = MALL.quadrants[q];
+        bySection[q] = { label: u.label, baseHue: u.hue, stores: new Map() };
+      }
+
+      function add(room) {
+        if (room.hidden || !room.w || !room.h) return;
+        const sec = bySection[room.q];
+        const a = normAreaToM2(room.w, room.h);
+        sec.stores.set(room.name, (sec.stores.get(room.name) || 0) + a);
+      }
+
+      for (const r of rooms) add(r);
+      for (const f of fillers) add(f);
+      for (const c of customRooms) add(c);
+
+      let total = 0;
+      for (const q of QUADS) {
+        for (const a of bySection[q].stores.values()) total += a;
+      }
+      return { bySection, total };
+    }
+
+    function renderSectionsPanel() {
+      const el = document.getElementById("sections");
+      const { bySection, total } = collectStoreAreas();
+      const blocks = QUADS.map((q) => {
+        const sec = bySection[q];
+        const rows = [...sec.stores.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .map(([name, area]) => {
+            const pct = total > 0 ? (area / total) * 100 : 0;
+            return `<li class="store-row">
+              <span class="store-name" title="${name}">${name}</span>
+              <span class="store-stats">${area.toFixed(0)} m² · ${pct.toFixed(1)}%</span>
+            </li>`;
+          }).join("");
+        const secTotal = [...sec.stores.values()].reduce((s, a) => s + a, 0);
+        const secPct = total > 0 ? (secTotal / total) * 100 : 0;
+        return `<div class="section-block">
+          <div class="section-head">
+            <span class="legend-swatch" style="background:${storeColor(sec.baseHue, "standard")}"></span>
+            <span>${sec.label}</span>
+          </div>
+          <ul class="store-list">${rows}</ul>
+          <div class="store-stats" style="padding-left:22px;margin-top:4px">${secTotal.toFixed(0)} m² · ${secPct.toFixed(1)}%</div>
+        </div>`;
+      }).join("");
+
+      el.innerHTML = `
+        <h2>Secciones</h2>
+        ${blocks}
+        <div class="sections-total">Total tiendas: ${total.toFixed(0)} m²</div>`;
+    }
+
+    function renderLegend() {
+      const el = document.getElementById("legend");
+      const items = QUADS.map((q) => {
+        const u = MALL.quadrants[q];
+        const color = storeColor(u.hue, "standard");
+        return `<li class="legend-item">
+          <span class="legend-swatch" style="background:${color}"></span>
+          <span class="legend-label">${u.label}</span>
+        </li>`;
+      }).join("");
+
+      const hallItem = `<li class="legend-item">
+        <span class="legend-swatch" style="background:${HALL_COLOR}"></span>
+        <span class="legend-label">Pasillos e isla central</span>
+      </li>`;
+
+      el.innerHTML = `
+        <h2>Leyenda</h2>
+        <ul class="legend-items">${items}${hallItem}</ul>`;
+    }
+
+    function setupRoomCreator() {
+      const qSel = document.getElementById("creator-q");
+      qSel.innerHTML = QUADS.map((q) => {
+        const u = MALL.quadrants[q];
+        return `<option value="${q}">${u.label}</option>`;
+      }).join("");
+
+      document.getElementById("creator-btn").addEventListener("click", () => {
+        if (placement) {
+          placement = null;
+          stage.classList.remove("placing", "placing-drag");
+          document.getElementById("creator-btn").classList.remove("active");
+          document.getElementById("creator-btn").textContent = "Crear";
+          document.getElementById("creator-hint").textContent = "Selecciona tipo y pulsa Crear, luego arrastra al plano.";
+          return;
+        }
+        const q = qSel.value;
+        const tier = document.getElementById("creator-tier").value;
+        const name = document.getElementById("creator-name").value.trim()
+          || `Nueva · ${MALL.quadrants[q].label}`;
+        placement = {
+          spec: { q, tier, name, baseHue: MALL.quadrants[q].hue },
+          nx: hall.cx, ny: hall.cy, dragging: false,
+        };
+        stage.classList.add("placing");
+        const btn = document.getElementById("creator-btn");
+        btn.classList.add("active");
+        btn.textContent = "Cancelar";
+        document.getElementById("creator-hint").textContent = "Arrastra al plano y suelta. Las celdas se adaptan al tamaño.";
+      });
+    }
+
     async function boot() {
       const data = window.CONTOUR_DATA || await fetch("contour.json").then((r) => r.json());
       OUTER = data.outer;
@@ -588,6 +1131,8 @@
       const icy = ISLAND.reduce((s, p) => s + p[1], 0) / ISLAND.length;
       hall.cx = hall.tx = icx;
       hall.cy = hall.ty = icy;
+      renderLegend();
+      setupRoomCreator();
       window.addEventListener("resize", resize);
       resize();
       requestAnimationFrame(frame);
