@@ -92,18 +92,18 @@
 
     const rooms = roomDefs.map((d) => ({
       ...d,
-      // base cell
       bx: 0, by: 0, bw: 0, bh: 0,
-      // drawn rect (may grow into hidden neighbors)
       x: 0, y: 0, w: 0, h: 0,
       lx: 0, ly: 0, lw: 0, lh: 0,
       prox: 0,
       visibleFrac: 1,
       hidden: false,
-      absorbIds: [], // hidden rooms this one swallowed
+      absorbIds: [],
     }));
 
     const byId = Object.fromEntries(rooms.map((r) => [r.id, r]));
+    /** Synthetic rooms that fill a whole segment when no neighbor can absorb. */
+    let fillers = [];
 
     let hueShift = 0;
     let dpr = 1;
@@ -269,9 +269,23 @@
       return { x, y, w: r - x, h: btm - y };
     }
 
+    /** Full rectangle of a (quad, band) block between halls. */
+    function segmentRect(L, q, band) {
+      let rect = null;
+      for (let gj = 0; gj < ROWS; gj++) {
+        for (let gi = 0; gi < ROOMS_PER_BAND; gi++) {
+          const c = cellRect(L, q, band, gi, gj);
+          const piece = { x: c.x, y: c.y, w: c.w, h: c.h };
+          rect = rect ? unionRect(rect, piece) : piece;
+        }
+      }
+      return rect;
+    }
+
     function layoutFromHall(snap) {
       if (!metrics) metrics = computeMetrics();
       const L = hallLayout(hall.cx, hall.cy);
+      fillers = [];
 
       // 1) base cells + visibility
       for (const r of rooms) {
@@ -286,17 +300,19 @@
         r.hidden = r.visibleFrac < VISIBLE_MIN;
       }
 
-      // 2) hidden rooms → random visible neighbor absorbs their space
+      // 2) hidden → random visible neighbor absorbs
       const seed = `${Math.round(hall.cx / 8)}:${Math.round(hall.cy / 8)}`;
+      const absorbed = new Set();
       for (const r of rooms) {
         if (!r.hidden) continue;
         const cands = neighborsOf(r).filter((n) => !n.hidden);
         if (!cands.length) continue;
         const pick = cands[hashStr(r.id + "|" + seed) % cands.length];
         pick.absorbIds.push(r.id);
+        absorbed.add(r.id);
       }
 
-      // 3) final draw rects = base ∪ absorbed hidden cells
+      // 3) visible rooms grow into absorbed cells
       for (const r of rooms) {
         if (r.hidden) {
           r.x = r.bx; r.y = r.by; r.w = r.bw; r.h = r.bh;
@@ -310,9 +326,49 @@
         r.x = rect.x; r.y = rect.y; r.w = rect.w; r.h = rect.h;
       }
 
+      // 4) no neighbor → filler for the whole segment (if no visibles left in it)
+      for (const q of QUADS) {
+        for (let band = 0; band < BANDS; band++) {
+          const segRooms = rooms.filter((r) => r.q === q && r.band === band);
+          const orphans = segRooms.filter((r) => r.hidden && !absorbed.has(r.id));
+          if (!orphans.length) continue;
+
+          const visibles = segRooms.filter((r) => !r.hidden);
+          let rect;
+          if (visibles.length === 0) {
+            // empty segment → one room spanning the full hall-bounded block
+            rect = segmentRect(L, q, band);
+          } else {
+            // leftover islands without neighbors → cover their union
+            rect = { x: orphans[0].bx, y: orphans[0].by, w: orphans[0].bw, h: orphans[0].bh };
+            for (let i = 1; i < orphans.length; i++) {
+              const o = orphans[i];
+              rect = unionRect(rect, { x: o.bx, y: o.by, w: o.bw, h: o.bh });
+            }
+          }
+
+          const frac = visibleFraction(rect.x, rect.y, rect.w, rect.h);
+          if (frac < VISIBLE_MIN) continue;
+
+          fillers.push({
+            id: `fill-${q}-b${band}`,
+            name: `${q.toUpperCase()} ·`,
+            q, band,
+            hue: (QUAD_HUE[q] + band * 40 + 15) % 360,
+            x: rect.x, y: rect.y, w: rect.w, h: rect.h,
+            lx: rect.x, ly: rect.y, lw: rect.w, lh: rect.h,
+            prox: Math.max(...orphans.map((o) => o.prox)),
+            hidden: false,
+          });
+        }
+      }
+
       if (snap) {
         for (const r of rooms) {
           r.lx = r.x; r.ly = r.y; r.lw = r.w; r.lh = r.h;
+        }
+        for (const f of fillers) {
+          f.lx = f.x; f.ly = f.y; f.lw = f.w; f.lh = f.h;
         }
       }
     }
@@ -445,6 +501,9 @@
       for (const r of rooms) {
         r.lx = r.x; r.ly = r.y; r.lw = r.w; r.lh = r.h;
       }
+      for (const f of fillers) {
+        f.lx = f.x; f.ly = f.y; f.lw = f.w; f.lh = f.h;
+      }
     }
 
     function frame(t) {
@@ -455,6 +514,7 @@
       drawCircularHall(t);
       const sorted = [...rooms].sort((a, b) => a.prox - b.prox);
       for (const room of sorted) drawRoomClipped(room, t);
+      for (const f of fillers) drawRoomClipped(f, t);
       drawCircularHall(t);
       requestAnimationFrame(frame);
     }
