@@ -299,9 +299,9 @@
     const SPACE = { w: 1000, h: 740 };
     let OUTER = null;
     let ISLAND = null;
-    let ISLAND_VOID = null;
+    let ISLAND_OUTER = null;
     let OUTER_BOUNDS = { minX: 40, maxX: 960, minY: 40, maxY: 700 };
-    let pathOuterPx = null, pathIslandPx = null, pathIslandVoidPx = null, pathInnerHallPx = null, pathRingPx = null;
+    let pathOuterPx = null, pathIslandPx = null, pathIslandOuterPx = null, pathIslandVoidPx = null, pathInnerHallPx = null, pathRingPx = null;
     // Uniform scale + letterbox offsets (preserves contour proportions)
     let view = { ox: 0, oy: 0, s: 1 };
 
@@ -430,26 +430,25 @@
       return inside;
     }
 
-    /** Inset polygon toward centroid by dist (norm units ≈ hall thickness). */
-    function insetPolygon(poly, dist) {
+    /** Outset polygon away from centroid by dist (norm units ≈ hall thickness). */
+    function outsetPolygon(poly, dist) {
       let cx = 0, cy = 0;
       for (const [x, y] of poly) { cx += x; cy += y; }
       cx /= poly.length;
       cy /= poly.length;
       return poly.map(([x, y]) => {
-        const dx = cx - x, dy = cy - y;
+        const dx = x - cx, dy = y - cy;
         const len = Math.hypot(dx, dy);
         if (len < 1e-6) return [x, y];
-        const move = Math.min(dist, len * 0.92);
-        return [x + (dx / len) * move, y + (dy / len) * move];
+        return [x + (dx / len) * dist, y + (dy / len) * dist];
       });
     }
 
     function buildPixelPaths() {
       if (!OUTER || !ISLAND || !W || !view.s) return;
       const { ox, oy, s } = view;
-      const hallInset = metrics ? metrics.vW : HALL_REF;
-      ISLAND_VOID = insetPolygon(ISLAND, hallInset);
+      const hallOutset = metrics ? metrics.vW : HALL_REF;
+      ISLAND_OUTER = outsetPolygon(ISLAND, hallOutset);
 
       function addPoly(path, poly) {
         path.moveTo(ox + poly[0][0] * s, oy + poly[0][1] * s);
@@ -459,17 +458,19 @@
         path.closePath();
       }
       pathOuterPx = new Path2D(); addPoly(pathOuterPx, OUTER);
-      pathIslandPx = new Path2D(); addPoly(pathIslandPx, ISLAND);
-      pathIslandVoidPx = new Path2D(); addPoly(pathIslandVoidPx, ISLAND_VOID);
+      pathIslandVoidPx = new Path2D(); addPoly(pathIslandVoidPx, ISLAND);
+      pathIslandPx = pathIslandVoidPx;
+      pathIslandOuterPx = new Path2D(); addPoly(pathIslandOuterPx, ISLAND_OUTER);
       pathInnerHallPx = new Path2D();
+      addPoly(pathInnerHallPx, ISLAND_OUTER);
       addPoly(pathInnerHallPx, ISLAND);
-      addPoly(pathInnerHallPx, ISLAND_VOID);
-      pathRingPx = new Path2D(); addPoly(pathRingPx, OUTER); addPoly(pathRingPx, ISLAND);
+      pathRingPx = new Path2D(); addPoly(pathRingPx, OUTER); addPoly(pathRingPx, ISLAND_OUTER);
     }
 
     function inOuter(x, y) { return OUTER ? pointInPoly(x, y, OUTER) : false; }
-    function inIsland(x, y) { return ISLAND ? pointInPoly(x, y, ISLAND) : false; }
-    function isVisiblePoint(x, y) { return inOuter(x, y) && !inIsland(x, y); }
+    function inIslandVoid(x, y) { return ISLAND ? pointInPoly(x, y, ISLAND) : false; }
+    function inIslandExclusion(x, y) { return ISLAND_OUTER ? pointInPoly(x, y, ISLAND_OUTER) : inIslandVoid(x, y); }
+    function isVisiblePoint(x, y) { return inOuter(x, y) && !inIslandExclusion(x, y); }
     function visibleFraction(x, y, w, h) {
       const N = 10;
       let hit = 0;
@@ -926,15 +927,17 @@
     }
 
     function drawContourShell() {
-      if (!pathOuterPx || !pathIslandPx) return;
+      if (!pathOuterPx) return;
       ctx.fillStyle = "rgba(255,255,255,0.04)";
       ctx.fill(pathOuterPx);
       ctx.strokeStyle = "rgba(255,255,255,0.45)";
       ctx.lineWidth = 2;
       ctx.stroke(pathOuterPx);
-      ctx.strokeStyle = "rgba(255,255,255,0.2)";
-      ctx.lineWidth = 1.5;
-      ctx.stroke(pathIslandPx);
+      if (pathIslandOuterPx) {
+        ctx.strokeStyle = "rgba(255,255,255,0.2)";
+        ctx.lineWidth = 1.5;
+        ctx.stroke(pathIslandOuterPx);
+      }
     }
 
     function drawInnerIslandHall() {
