@@ -51,6 +51,15 @@
       gap: 0;
     }
 
+    .panel-footer {
+      margin-top: auto;
+      padding-top: 14px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      font-size: 12px;
+      line-height: 1.4;
+      color: #8a96a5;
+    }
+
     .legend-block {
       flex: 0 0 auto;
     }
@@ -106,6 +115,7 @@
 
     .stage.placing { cursor: copy; }
     .stage.placing-drag { cursor: grabbing; }
+    .stage.hall-drag { cursor: grabbing; }
 
     .sections-panel {
       width: 220px;
@@ -270,6 +280,7 @@
         <button type="button" id="creator-btn">Crear</button>
         <p class="hint" id="creator-hint">Selecciona tipo y pulsa Crear, luego arrastra al plano.</p>
       </div>
+      <p class="panel-footer">Click + drag mueve pasillos con adaptación dinámica de locales.</p>
     </aside>
     <div class="stage" id="stage">
       <canvas id="c"></canvas>
@@ -361,6 +372,7 @@
     let customRooms = [];
     let suppressedIds = new Set();
     let placement = null;
+    let hallDrag = false;
     let customSeq = 0;
     let dpr = 1, W = 0, H = 0, metrics = null;
 
@@ -812,44 +824,60 @@
       };
     }
 
+    function clampHall(nx, ny) {
+      const b = hallBounds();
+      hall.tx = Math.max(b.minX, Math.min(b.maxX, nx));
+      hall.ty = Math.max(b.minY, Math.min(b.maxY, ny));
+    }
+
     stage.addEventListener("pointerdown", (e) => {
-      if (!placement) return;
-      placement.dragging = true;
-      stage.setPointerCapture(e.pointerId);
-      stage.classList.add("placing-drag");
       const { nx, ny } = pointerNorm(e);
-      placement.nx = nx;
-      placement.ny = ny;
+      if (placement) {
+        placement.dragging = true;
+        placement.nx = nx;
+        placement.ny = ny;
+        stage.setPointerCapture(e.pointerId);
+        stage.classList.add("placing-drag");
+        return;
+      }
+      hallDrag = true;
+      clampHall(nx, ny);
+      stage.setPointerCapture(e.pointerId);
+      stage.classList.add("hall-drag");
     });
 
     stage.addEventListener("pointermove", (e) => {
       const { nx, ny } = pointerNorm(e);
       if (placement) {
+        if (!placement.dragging) return;
         placement.nx = nx;
         placement.ny = ny;
         return;
       }
-      const b = hallBounds();
-      hall.tx = Math.max(b.minX, Math.min(b.maxX, nx));
-      hall.ty = Math.max(b.minY, Math.min(b.maxY, ny));
+      if (!hallDrag) return;
+      clampHall(nx, ny);
     });
 
-    stage.addEventListener("pointerup", (e) => {
-      if (!placement) return;
-      if (placement.dragging) {
+    function endPointer(e) {
+      if (placement?.dragging) {
         const ok = placeCustomRoom(placement.nx, placement.ny, placement.spec);
         if (ok) {
           placement = null;
-          stage.classList.remove("placing", "placing-drag");
+          stage.classList.remove("placing");
           document.getElementById("creator-btn").classList.remove("active");
           document.getElementById("creator-btn").textContent = "Crear";
           document.getElementById("creator-hint").textContent = "Selecciona tipo y pulsa Crear, luego arrastra al plano.";
+        } else if (placement) {
+          placement.dragging = false;
         }
       }
-      placement.dragging = false;
-      stage.classList.remove("placing-drag");
+      hallDrag = false;
+      stage.classList.remove("placing-drag", "hall-drag");
       try { stage.releasePointerCapture(e.pointerId); } catch (_) {}
-    });
+    }
+
+    stage.addEventListener("pointerup", endPointer);
+    stage.addEventListener("pointercancel", endPointer);
 
     function clipToContourRing() {
       if (!pathRingPx) return false;
@@ -986,7 +1014,7 @@
       for (const room of sorted) drawRoomClipped(room, t);
       for (const f of fillers) drawRoomClipped(f, t);
       for (const c of customRooms) drawRoomClipped(c, t);
-      if (placement) drawPlacementGhost();
+      if (placement?.dragging) drawPlacementGhost();
       // Island on top so hall arms don't paint over it
       if (pathIslandPx) {
         ctx.fillStyle = HALL_COLOR;
